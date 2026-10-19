@@ -1,0 +1,641 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model PlatformSetting {
+  id                         String   @id @default("platform")
+  maxSheltersPerOrganization Int      @default(3)
+  platformName               String   @default("PawHaven")
+  supportEmail               String?
+  updatedAt                  DateTime @updatedAt
+
+  @@map("platform_settings")
+}
+
+model User {
+  id                 String   @id @default(cuid())
+  email              String   @unique
+  name               String
+  passwordHash       String
+  isPlatformAdmin    Boolean  @default(false)
+  mustChangePassword Boolean  @default(false)
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  sessions                Session[]
+  memberships             Membership[]
+  animalsCreated          Animal[]                    @relation("AnimalCreatedBy")
+  animalsCleared          Animal[]                    @relation("AnimalClearedBy")
+  photosCreated           AnimalPhoto[]
+  statusEvents            AnimalStatusEvent[]
+  transfers               AnimalTransfer[]
+  medicalEntered          MedicalRecord[]
+  administrations         MedicationAdministration[]
+  tasksCreated            CareTask[]                  @relation("TaskCreatedBy")
+  tasksCompleted          CareTask[]                  @relation("TaskCompletedBy")
+  applicantsCreated       Applicant[]
+  applicationsCreated     AdoptionApplication[]       @relation("ApplicationCreatedBy")
+  applicationsDecided     AdoptionApplication[]       @relation("ApplicationDecidedBy")
+  screenings              ScreeningEvent[]
+  adoptionsFinalized      Adoption[]
+  adoptionDocs            AdoptionDocument[]
+  followUpsCreated        PostAdoptionFollowUp[]      @relation("FollowUpCreatedBy")
+  followUpsCompleted      PostAdoptionFollowUp[]      @relation("FollowUpCompletedBy")
+  auditEvents             AuditEvent[]
+  notifications           Notification[]
+
+  @@map("users")
+}
+
+model Session {
+  id                   String   @id @default(cuid())
+  userId               String
+  tokenHash            String   @unique
+  csrfSecret           String
+  activeOrganizationId String?
+  activeShelterId      String?
+  expiresAt            DateTime
+  createdAt            DateTime @default(now())
+  userAgent            String?
+  ip                   String?
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model RateBucket {
+  id        String   @id @default(cuid())
+  bucket    String
+  createdAt DateTime @default(now())
+
+  @@index([bucket, createdAt])
+  @@map("rate_buckets")
+}
+
+model Organization {
+  id                      String   @id @default(cuid())
+  name                    String
+  slug                    String   @unique
+  legalName               String?
+  email                   String?
+  phone                   String?
+  website                 String?
+  addressLine1            String?
+  addressLine2            String?
+  city                    String?
+  region                  String?
+  postalCode              String?
+  country                 String?
+  logoStorageKey          String?
+  primaryColor            String   @default("#1f6b4a")
+  accentColor             String   @default("#b85a28")
+  timezone                String   @default("UTC")
+  locale                  String   @default("en-US")
+  dateFormat              String   @default("yyyy-MM-dd")
+  currency                String   @default("USD")
+  adoptionFeeEnabled      Boolean  @default(false)
+  defaultAdoptionFeeCents Int?
+  maxSheltersOverride     Int?
+  shelterCount            Int      @default(0)
+  intakeSources           String   @default("[\"stray\",\"owner_surrender\",\"transfer_in\",\"born_in_care\",\"other\"]")
+  customStatuses          String   @default("[]")
+  statusLabels            String   @default("{}")
+  medicalCategories       String   @default("[]")
+  adoptionStatusLabels    String   @default("{}")
+  adoptionAgreement       String   @default("")
+  reminderLeadDays        Int      @default(2)
+  active                  Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  shelters        Shelter[]
+  memberships     Membership[]
+  sequences       OrgSequence[]
+  rolePermissions RolePermission[]
+  animals         Animal[]
+  applicants      Applicant[]
+  applications    AdoptionApplication[]
+  adoptions       Adoption[]
+  medicalRecords  MedicalRecord[]
+  careTasks       CareTask[]
+  auditEvents     AuditEvent[]
+  notifications   Notification[]
+
+  @@map("organizations")
+}
+
+model OrgSequence {
+  organizationId String
+  name           String
+  value          Int          @default(0)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@id([organizationId, name])
+  @@map("org_sequences")
+}
+
+model Shelter {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  code           String?
+  email          String?
+  phone          String?
+  addressLine1   String?
+  addressLine2   String?
+  city           String?
+  region         String?
+  postalCode     String?
+  country        String?
+  capacity       Int?
+  notes          String?
+  active         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  assignments       ShelterAssignment[]
+  animals           Animal[]
+  transfersFrom     AnimalTransfer[]          @relation("TransferFrom")
+  transfersTo       AnimalTransfer[]          @relation("TransferTo")
+  medicalRecords    MedicalRecord[]
+  careTasks         CareTask[]
+  adoptions         Adoption[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("shelters")
+}
+
+model Membership {
+  id             String       @id @default(cuid())
+  userId         String
+  organizationId String
+  role           String
+  active         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  user           User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  shelters       ShelterAssignment[]
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@map("memberships")
+}
+
+model ShelterAssignment {
+  id           String     @id @default(cuid())
+  membershipId String
+  shelterId    String
+  membership   Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  shelter      Shelter    @relation(fields: [shelterId], references: [id], onDelete: Restrict)
+
+  @@unique([membershipId, shelterId])
+  @@map("shelter_assignments")
+}
+
+model RolePermission {
+  id             String       @id @default(cuid())
+  organizationId String
+  role           String
+  permission     String
+  allowed        Boolean
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, role, permission])
+  @@map("role_permissions")
+}
+
+model Animal {
+  id                      String    @id @default(cuid())
+  organizationId          String
+  shelterId               String
+  publicCode              String
+  name                    String
+  nameNormalized          String
+  species                 String
+  breed                   String?
+  breedUnknown            Boolean   @default(false)
+  sex                     String    @default("unknown")
+  birthDate               String?
+  birthDateEstimated      Boolean   @default(true)
+  estimatedAgeYears       Int?
+  estimatedAgeMonths      Int?
+  color                   String?
+  distinguishingFeatures  String?
+  microchip               String?
+  intakeDate              DateTime
+  intakeSource            String
+  previousOwnerName       String?
+  previousOwnerPhone      String?
+  previousOwnerEmail      String?
+  previousOwnerNotes      String?
+  housingLocation         String?
+  status                  String    @default("intake_pending")
+  statusBeforeAdoption    String?
+  temperament             String?
+  specialHandling         String?
+  dietaryNeeds            String?
+  sterilizationStatus     String    @default("unknown")
+  identificationTags      String?
+  notes                   String?
+  size                    String    @default("unknown")
+  activityLevel           String    @default("unknown")
+  weightGrams             Int?
+  medicalClearance        String    @default("unknown")
+  medicalClearanceBasis   String?
+  medicalClearanceAt      DateTime?
+  medicalClearanceById    String?
+  version                 Int       @default(1)
+  archivedAt              DateTime?
+  createdById             String
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  shelter         Shelter      @relation(fields: [shelterId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  createdBy       User         @relation("AnimalCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  clearanceBy     User?        @relation("AnimalClearedBy", fields: [medicalClearanceById], references: [id], onDelete: Restrict)
+  photos          AnimalPhoto[]
+  statusEvents    AnimalStatusEvent[]
+  transfers       AnimalTransfer[]
+  medicalRecords  MedicalRecord[]
+  careTasks       CareTask[]
+  administrations MedicationAdministration[]
+  applicationLinks ApplicationAnimal[]
+  adoptions       Adoption[]
+
+  @@unique([organizationId, publicCode])
+  @@unique([organizationId, microchip])
+  @@unique([id, organizationId])
+  @@index([organizationId, status])
+  @@index([organizationId, shelterId])
+  @@index([organizationId, nameNormalized])
+  @@map("animals")
+}
+
+model AnimalPhoto {
+  id             String   @id @default(cuid())
+  animalId       String
+  organizationId String
+  storageKey     String
+  fileName       String
+  mimeType       String
+  sizeBytes      Int
+  isPrimary      Boolean  @default(false)
+  createdById    String
+  createdAt      DateTime @default(now())
+  animal         Animal   @relation(fields: [animalId], references: [id], onDelete: Restrict)
+  createdBy      User     @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([animalId])
+  @@map("animal_photos")
+}
+
+model AnimalStatusEvent {
+  id             String   @id @default(cuid())
+  animalId       String
+  organizationId String
+  fromStatus     String?
+  toStatus       String
+  note           String?
+  actorId        String
+  createdAt      DateTime @default(now())
+  animal         Animal   @relation(fields: [animalId], references: [id], onDelete: Restrict)
+  actor          User     @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([animalId, createdAt])
+  @@map("animal_status_events")
+}
+
+model AnimalTransfer {
+  id                    String   @id @default(cuid())
+  animalId              String
+  organizationId        String
+  fromShelterId         String
+  toShelterId           String?
+  externalDestination   String?
+  kind                  String
+  reason                String
+  actorId               String
+  createdAt             DateTime @default(now())
+  animal                Animal   @relation(fields: [animalId], references: [id], onDelete: Restrict)
+  fromShelter           Shelter  @relation("TransferFrom", fields: [fromShelterId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  toShelter             Shelter? @relation("TransferTo", fields: [toShelterId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  actor                 User     @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([animalId])
+  @@index([organizationId, createdAt])
+  @@map("animal_transfers")
+}
+
+model MedicalRecord {
+  id                     String    @id @default(cuid())
+  organizationId         String
+  shelterId              String
+  animalId               String
+  category               String
+  occurredAt             DateTime
+  providerName           String?
+  providerIsVeterinarian Boolean   @default(false)
+  observations           String?
+  diagnosis              String?
+  treatment              String?
+  medicationName         String?
+  dose                   String?
+  instructions           String?
+  startDate              String?
+  endDate                String?
+  nextFollowUpAt         DateTime?
+  allergies              String?
+  notes                  String?
+  correctionOfId         String?
+  supersededAt           DateTime?
+  enteredById            String
+  version                Int       @default(1)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  shelter        Shelter       @relation(fields: [shelterId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  animal         Animal        @relation(fields: [animalId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  enteredBy      User          @relation(fields: [enteredById], references: [id], onDelete: Restrict)
+  correctionOf   MedicalRecord?  @relation("Corrections", fields: [correctionOfId], references: [id], onDelete: Restrict)
+  corrections    MedicalRecord[] @relation("Corrections")
+  attachments    MedicalAttachment[]
+  administrations MedicationAdministration[]
+  careTasks      CareTask[]
+
+  @@index([organizationId, animalId, occurredAt])
+  @@index([organizationId, category])
+  @@map("medical_records")
+}
+
+model MedicalAttachment {
+  id              String        @id @default(cuid())
+  medicalRecordId String
+  organizationId  String
+  storageKey      String
+  fileName        String
+  mimeType        String
+  sizeBytes       Int
+  createdById     String
+  createdAt       DateTime      @default(now())
+  medicalRecord   MedicalRecord @relation(fields: [medicalRecordId], references: [id], onDelete: Restrict)
+
+  @@index([medicalRecordId])
+  @@map("medical_attachments")
+}
+
+model MedicationAdministration {
+  id               String        @id @default(cuid())
+  organizationId   String
+  medicalRecordId  String
+  animalId         String
+  administeredAt   DateTime
+  administeredById String
+  notes            String?
+  createdAt        DateTime      @default(now())
+  medicalRecord    MedicalRecord @relation(fields: [medicalRecordId], references: [id], onDelete: Restrict)
+  animal           Animal        @relation(fields: [animalId], references: [id], onDelete: Restrict)
+  administeredBy   User          @relation(fields: [administeredById], references: [id], onDelete: Restrict)
+
+  @@index([medicalRecordId])
+  @@index([animalId])
+  @@map("medication_administrations")
+}
+
+model CareTask {
+  id              String    @id @default(cuid())
+  organizationId  String
+  shelterId       String
+  animalId        String
+  medicalRecordId String?
+  kind            String
+  title           String
+  dueAt           DateTime
+  status          String    @default("open")
+  notes           String?
+  completedAt     DateTime?
+  completedById   String?
+  createdById     String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  shelter       Shelter        @relation(fields: [shelterId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  animal        Animal         @relation(fields: [animalId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  medicalRecord MedicalRecord? @relation(fields: [medicalRecordId], references: [id], onDelete: Restrict)
+  createdBy     User           @relation("TaskCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  completedBy   User?          @relation("TaskCompletedBy", fields: [completedById], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, status, dueAt])
+  @@index([animalId])
+  @@map("care_tasks")
+}
+
+model Applicant {
+  id                 String    @id @default(cuid())
+  organizationId     String
+  firstName          String
+  lastName           String
+  email              String?
+  phone              String?
+  preferredContact   String    @default("email")
+  addressLine1       String?
+  city               String?
+  region             String?
+  postalCode         String?
+  householdAdults    Int?
+  householdChildren  Int?
+  housingType        String?
+  hasYard            String?
+  otherPets          String?
+  experienceNotes    String?
+  customAnswers      String    @default("{}")
+  redactedAt         DateTime?
+  createdById        String
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  createdBy          User      @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  applications       AdoptionApplication[]
+  adoptions          Adoption[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, lastName])
+  @@map("applicants")
+}
+
+model AdoptionApplication {
+  id               String    @id @default(cuid())
+  organizationId   String
+  applicantId      String
+  status           String    @default("draft")
+  decisionReason   String?
+  submittedAt      DateTime?
+  decidedAt        DateTime?
+  decidedById      String?
+  version          Int       @default(1)
+  createdById      String
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  applicant    Applicant    @relation(fields: [applicantId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  createdBy    User         @relation("ApplicationCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  decidedBy    User?        @relation("ApplicationDecidedBy", fields: [decidedById], references: [id], onDelete: Restrict)
+  animals      ApplicationAnimal[]
+  screenings   ScreeningEvent[]
+  adoptions    Adoption[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, status])
+  @@map("adoption_applications")
+}
+
+model ApplicationAnimal {
+  id             String              @id @default(cuid())
+  applicationId  String
+  animalId       String
+  organizationId String
+  application    AdoptionApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  animal         Animal              @relation(fields: [animalId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
+  @@unique([applicationId, animalId])
+  @@index([animalId])
+  @@map("application_animals")
+}
+
+model ScreeningEvent {
+  id             String              @id @default(cuid())
+  applicationId  String
+  organizationId String
+  kind           String
+  occurredAt     DateTime
+  result         String?
+  notes          String?
+  nextActionAt   DateTime?
+  actorId        String
+  createdAt      DateTime            @default(now())
+  application    AdoptionApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  actor          User                @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([applicationId, occurredAt])
+  @@map("screening_events")
+}
+
+model Adoption {
+  id                        String    @id @default(cuid())
+  organizationId            String
+  applicationId             String
+  animalId                  String
+  applicantId               String
+  shelterId                 String
+  adoptionDate              String
+  agreementSummary          String?
+  feeCents                  Int?
+  clearanceAcknowledgement  String?
+  status                    String    @default("active")
+  returnedAt                DateTime?
+  returnReason              String?
+  finalizedById             String
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  application  AdoptionApplication @relation(fields: [applicationId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  animal       Animal              @relation(fields: [animalId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  applicant    Applicant           @relation(fields: [applicantId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  shelter      Shelter             @relation(fields: [shelterId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  finalizedBy  User                @relation(fields: [finalizedById], references: [id], onDelete: Restrict)
+  documents    AdoptionDocument[]
+  followUps    PostAdoptionFollowUp[]
+
+  @@index([animalId, status])
+  @@index([organizationId, adoptionDate])
+  @@map("adoptions")
+}
+
+model AdoptionDocument {
+  id             String   @id @default(cuid())
+  adoptionId     String
+  organizationId String
+  storageKey     String
+  fileName       String
+  mimeType       String
+  sizeBytes      Int
+  createdById    String
+  createdAt      DateTime @default(now())
+  adoption       Adoption @relation(fields: [adoptionId], references: [id], onDelete: Restrict)
+  createdBy      User     @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([adoptionId])
+  @@map("adoption_documents")
+}
+
+model PostAdoptionFollowUp {
+  id             String    @id @default(cuid())
+  adoptionId     String
+  organizationId String
+  animalId       String
+  scheduledAt    DateTime
+  completedAt    DateTime?
+  notes          String?
+  outcome        String?
+  createdById    String
+  completedById  String?
+  createdAt      DateTime  @default(now())
+  adoption       Adoption  @relation(fields: [adoptionId], references: [id], onDelete: Restrict)
+  createdBy      User      @relation("FollowUpCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  completedBy    User?     @relation("FollowUpCompletedBy", fields: [completedById], references: [id], onDelete: Restrict)
+
+  @@index([adoptionId])
+  @@map("post_adoption_follow_ups")
+}
+
+model AuditEvent {
+  id             String   @id @default(cuid())
+  organizationId String?
+  actorId        String?
+  action         String
+  entityType     String
+  entityId       String?
+  metadata       String   @default("{}")
+  ip             String?
+  createdAt      DateTime @default(now())
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  actor          User?    @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_events")
+}
+
+model Notification {
+  id             String    @id @default(cuid())
+  organizationId String
+  userId         String
+  kind           String
+  title          String
+  body           String
+  href           String?
+  dedupeKey      String?
+  readAt         DateTime?
+  createdAt      DateTime  @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, readAt])
+  @@map("notifications")
+}
